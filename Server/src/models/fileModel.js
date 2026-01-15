@@ -1,5 +1,5 @@
 const {  DataTypes, UUIDV4 } = require('sequelize');
-const sequelize = require('../config/db');
+const { sequelize } = require('../config/db.js');
 const fileModel = sequelize.define('File',{
     id:{
         type: DataTypes.UUID,

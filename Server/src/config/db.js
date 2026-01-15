@@ -22,6 +22,10 @@ const connectDB = async () => {
        await sequelize.authenticate();
         console.log("DataBase connected successfully");
         
+        // Sync models with database (create tables if they don't exist)
+        await sequelize.sync({ alter: true });
+        console.log("Database tables synchronized successfully");
+        
     } catch (error) {
         console.log(`Error while connecting the db ${error}`);
         process.exit(1);
