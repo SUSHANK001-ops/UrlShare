@@ -25,6 +25,7 @@ const fileModel = sequelize.define('File',{
         type: DataTypes.DATE,
         allowNull:true
     },
+   
     downloadCount:{
         type: DataTypes.INTEGER,
         defaultValue:0
