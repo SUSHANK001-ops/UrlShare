@@ -1,5 +1,10 @@
 const router = require('express').Router();
-const downloadController = require('../controller/downloadController.js');
+const { redirectToDownloadPage, downloadFile } = require('../controller/downloadController.js');
 
-router.get('/:shortCode', downloadController);   // matches /d/anything
+// API endpoint for actual download (increments counter)
+router.get('/download/:shortCode', downloadFile);
+
+// Redirect to client download page
+router.get('/:shortCode', redirectToDownloadPage);
+
 module.exports = router;

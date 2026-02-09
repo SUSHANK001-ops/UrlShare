@@ -7,12 +7,7 @@ const handleMulterErrors = (err, req, res, next) => {
   if (err) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ 
-        error: 'File too large. Maximum size is 10MB.' 
-      });
-    }
-    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-      return res.status(400).json({ 
-        error: 'Too many files. Please send only one file.' 
+        error: 'File too large. Maximum size is 100MB per file.' 
       });
     }
     if (err.message === 'Field name missing') {
