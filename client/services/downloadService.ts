@@ -1,25 +1,33 @@
 import apiClient from './api'
 
-interface FileDetails {
+interface ShareFileInfo {
   id: string
   originalName: string
-  cloudinaryUrl: string
-  downloadCount: number
-  expiresAt: string
-  shortCode: string
+  fileSize: number
 }
 
-export const getFileInfo = async (shortCode: string): Promise<FileDetails> => {
-  const response = await apiClient.get<FileDetails>(`/download/${shortCode}`)
+interface ShareDetails {
+  id: string
+  shortCode: string
+  downloadCount: number
+  expiresAt: string
+  totalSize: number
+  fileCount: number
+  files: ShareFileInfo[]
+}
+
+export const getShareInfo = async (shortCode: string): Promise<ShareDetails> => {
+  const response = await apiClient.get<ShareDetails>(`/download/${shortCode}`)
   return response.data
 }
 
-export const downloadFileViaBackend = async (shortCode: string, fileName: string) => {
+export const downloadFileFromShare = async (shortCode: string, fileId: string, fileName: string) => {
   try {
-    const response = await apiClient.get(`/download/${shortCode}/file`, {
-      responseType: 'blob'
+    const response = await apiClient.get(`/download/${shortCode}/file/${fileId}`, {
+      responseType: 'blob',
+      timeout: 120000, // 2 minutes for large files
     })
-    
+
     // Create a blob URL and trigger download
     const blobUrl = window.URL.createObjectURL(response.data)
     const link = document.createElement('a')

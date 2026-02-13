@@ -1,12 +1,18 @@
 const cloudinary = require("../config/cloudinary.js");
 const { v4: uuidv4 } = require("uuid");
-const File = require("../models/fileModel.js");
+const { Share, ShareFile } = require("../models/shareModel.js");
+
+const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total per share
 
 // upload buffer to Cloudinary via stream
-function uploadBuffer(buffer) {
+function uploadBuffer(buffer, originalName) {
     return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-            { resource_type: "auto" },
+            {
+                resource_type: "auto",
+                // Use raw for non-image/non-video files to preserve format
+                ...(isRawFile(originalName) ? { resource_type: "raw" } : {}),
+            },
             (error, result) => {
                 if (error) reject(error);
                 else resolve(result);
@@ -14,6 +20,24 @@ function uploadBuffer(buffer) {
         );
         stream.end(buffer);
     });
+}
+
+// Check if a file should be uploaded as "raw" (binary) to Cloudinary
+function isRawFile(filename) {
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    const rawExtensions = [
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+        'txt', 'csv', 'json', 'xml', 'zip', 'rar', '7z', 'tar', 'gz',
+        'exe', 'msi', 'dmg', 'apk', 'ipa',
+        'html', 'css', 'js', 'ts', 'py', 'java', 'cpp', 'c', 'h',
+        'md', 'rtf', 'odt', 'ods', 'odp',
+        'ttf', 'otf', 'woff', 'woff2',
+        'sql', 'db', 'sqlite',
+        'iso', 'img', 'bin',
+        'psd', 'ai', 'sketch', 'fig',
+        'epub', 'mobi',
+    ];
+    return rawExtensions.includes(ext);
 }
 
 const uploadController = async (req, res) => {
@@ -24,78 +48,118 @@ const uploadController = async (req, res) => {
             });
         }
 
-        const uploadResults = [];
+        // Check total size
+        let totalSize = 0;
+        for (const file of req.files) {
+            totalSize += file.size;
+        }
+        if (totalSize > MAX_TOTAL_SIZE) {
+            return res.status(400).json({
+                error: `Total file size (${(totalSize / 1024 / 1024).toFixed(1)}MB) exceeds 100MB limit.`,
+            });
+        }
+
         const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
 
-        // Process each file
+        // Generate ONE shortCode for the entire share
+        const shortCode = uuidv4().slice(0, 8);
+
+        // Parse deleteTime (ms). Default 10 minutes.
+        const deleteTimeMs = Number.parseInt(req.body?.deleteTime, 10) || 10 * 60 * 1000;
+        const expiresAt = new Date(Date.now() + deleteTimeMs);
+
+        // Create the Share record first
+        const share = await Share.create({
+            shortCode,
+            expiresAt,
+            downloadCount: 0,
+            totalSize,
+            fileCount: req.files.length,
+        });
+
+        const uploadedFiles = [];
+        const failedFiles = [];
+
+        // Upload each file to Cloudinary and create ShareFile records
         for (const uploadedFile of req.files) {
             try {
                 const buffer = uploadedFile.buffer;
-                const result = await uploadBuffer(buffer);
+                const result = await uploadBuffer(buffer, uploadedFile.originalname);
 
-                // stronger short code
-                const shortCode = uuidv4().slice(0, 8);
-
-                // parse deleteTime (ms). Default 10 minutes.
-                const deleteTimeMs = Number.parseInt(req.body?.deleteTime, 10) || 10 * 60 * 1000;
-                const expiresAt = new Date(Date.now() + deleteTimeMs);
-
-                // create single DB record (store returned instance)
-                const newFile = await File.create({
+                await ShareFile.create({
+                    shareId: share.id,
                     originalName: uploadedFile.originalname,
                     cloudinaryPublicId: result.public_id,
                     cloudinaryUrl: result.secure_url,
-                    shortCode,
-                    downloadCount: 0,
-                    expiresAt,
+                    fileSize: uploadedFile.size,
+                    resourceType: result.resource_type || 'auto',
                 });
 
-                // Add to results - share URL points to client download page
-                uploadResults.push({
+                uploadedFiles.push({
                     fileName: uploadedFile.originalname,
-                    shareUrl: `${clientUrl}/d/${shortCode}`,
-                    fileId: newFile.id
+                    size: uploadedFile.size,
                 });
 
-                console.log(`File uploaded successfully: ${uploadedFile.originalname} with code ${shortCode}`);
-
-                // schedule deletion (note: use background job/cron in production)
-                if (deleteTimeMs > 0) {
-                    setTimeout(async () => {
-                        try {
-                            await File.destroy({ where: { id: newFile.id } });
-                            await cloudinary.uploader.destroy(newFile.cloudinaryPublicId, { resource_type: "auto" });
-                            console.log(`File ${shortCode} auto-deleted`);
-                        } catch (e) {
-                            console.error("Scheduled delete failed:", e);
-                        }
-                    }, deleteTimeMs);
-                }
+                console.log(`File uploaded: ${uploadedFile.originalname} -> share ${shortCode}`);
             } catch (fileError) {
                 console.error("Individual file upload failed:", fileError.message);
-                uploadResults.push({
+                failedFiles.push({
                     fileName: uploadedFile.originalname,
                     error: fileError.message || "Failed to upload this file",
-                    status: "failed"
                 });
             }
         }
 
-        // If at least one file succeeded
-        if (uploadResults.some(r => r.shareUrl)) {
-            return res.status(201).json({ 
-                files: uploadResults,
-                message: `Successfully uploaded ${uploadResults.filter(r => r.shareUrl).length} of ${req.files.length} file(s)`
-            });
-        } else {
-            return res.status(500).json({ 
-                error: "Failed to upload files",
-                files: uploadResults
+        // If no files succeeded, clean up the share
+        if (uploadedFiles.length === 0) {
+            await Share.destroy({ where: { id: share.id } });
+            return res.status(500).json({
+                error: "Failed to upload all files",
+                failedFiles,
             });
         }
+
+        // Update file count if some failed
+        if (failedFiles.length > 0) {
+            await share.update({ fileCount: uploadedFiles.length });
+        }
+
+        // Schedule deletion
+        if (deleteTimeMs > 0) {
+            setTimeout(async () => {
+                try {
+                    // Get all files in this share
+                    const files = await ShareFile.findAll({ where: { shareId: share.id } });
+                    // Delete from Cloudinary
+                    for (const file of files) {
+                        await cloudinary.uploader.destroy(file.cloudinaryPublicId, {
+                            resource_type: file.resourceType || "auto"
+                        }).catch(e => console.error("Cloudinary delete failed:", e));
+                    }
+                    // Delete DB records (cascade will remove ShareFiles)
+                    await Share.destroy({ where: { id: share.id } });
+                    console.log(`Share ${shortCode} auto-deleted (${files.length} files)`);
+                } catch (e) {
+                    console.error("Scheduled delete failed:", e);
+                }
+            }, deleteTimeMs);
+        }
+
+        const shareUrl = `${clientUrl}/d/${shortCode}`;
+
+        return res.status(201).json({
+            shareUrl,
+            shortCode,
+            fileCount: uploadedFiles.length,
+            totalSize,
+            uploadedFiles,
+            failedFiles,
+            expiresAt,
+            message: `Successfully uploaded ${uploadedFiles.length} file(s). Share URL: ${shareUrl}`,
+        });
     } catch (err) {
         console.error("Upload controller error:", err);
-        res.status(500).json({ error: "upload failed: " + err.message });
+        res.status(500).json({ error: "Upload failed: " + err.message });
     }
 };
 

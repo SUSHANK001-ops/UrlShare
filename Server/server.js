@@ -3,8 +3,7 @@ const cors = require('cors');
 const dotenv = require("dotenv");
 const { connectDB } = require('./src/config/db');
 const uploadRoute = require('./src/routes/uploadRoute.js');
-const downloadRoute = require('./src/routes/downloadRouter.js');
-const { getFileInfo } = require('./src/controller/downloadController.js');
+const { getShareInfo, downloadFile, redirectToDownloadPage } = require('./src/controller/downloadController.js');
 dotenv.config()
 
 const app = express();
@@ -36,9 +35,17 @@ app.get('/',(req,res)=>{
     res.send("URL Share API Server - Running on port " + port)
 })
 
+// Upload route
 app.use('/api', uploadRoute);
-app.get('/api/download/:shortCode', getFileInfo);  // API endpoint for file info
-app.use('/d', downloadRoute);  // Redirect to client download page
+
+// API: Get share info (all files in a share)
+app.get('/api/download/:shortCode', getShareInfo);
+
+// API: Download a specific file from a share
+app.get('/api/download/:shortCode/file/:fileId', downloadFile);
+
+// Redirect: /d/:shortCode -> client download page
+app.get('/d/:shortCode', redirectToDownloadPage);
 
 app.listen(port,()=>{
     console.log(`Server is running in port : ${port}`)

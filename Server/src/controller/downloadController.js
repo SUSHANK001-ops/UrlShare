@@ -1,84 +1,114 @@
-const File = require('../models/fileModel.js');
-const cloudinary = require('cloudinary').v2;
+const { Share, ShareFile } = require('../models/shareModel.js');
 const axios = require('axios');
 
-// Get file info (for API)
-const getFileInfo = async (req, res) => {
+// Get share info with all files (for API)
+const getShareInfo = async (req, res) => {
     try {
         const { shortCode } = req.params;
         if (!shortCode) {
-            return res.status(400).json({ error: "Shortcode is required" })
-        }
-        const fileRecord = await File.findOne({ where: { shortCode } });
-        if (!fileRecord) {
-            return res.status(404).json({ error: "File not found" })
+            return res.status(400).json({ error: "Shortcode is required" });
         }
 
-        // Return file info without incrementing count
+        const share = await Share.findOne({
+            where: { shortCode },
+            include: [{
+                model: ShareFile,
+                as: 'files',
+                attributes: ['id', 'originalName', 'fileSize', 'resourceType', 'createdAt']
+            }]
+        });
+
+        if (!share) {
+            return res.status(404).json({ error: "File not found or has expired" });
+        }
+
+        // Check if expired
+        if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+            return res.status(410).json({ error: "This share has expired" });
+        }
+
         res.status(200).json({
-            id: fileRecord.id,
-            originalName: fileRecord.originalName,
-            cloudinaryUrl: fileRecord.cloudinaryUrl,
-            downloadCount: fileRecord.downloadCount,
-            expiresAt: fileRecord.expiresAt,
-            shortCode: fileRecord.shortCode,
+            id: share.id,
+            shortCode: share.shortCode,
+            downloadCount: share.downloadCount,
+            expiresAt: share.expiresAt,
+            totalSize: share.totalSize,
+            fileCount: share.fileCount,
+            files: share.files.map(f => ({
+                id: f.id,
+                originalName: f.originalName,
+                fileSize: Number(f.fileSize),
+            })),
         });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Server error" });
     }
-}
+};
 
 // Redirect to client download page
 const redirectToDownloadPage = async (req, res) => {
     try {
         const { shortCode } = req.params;
         if (!shortCode) {
-            return res.status(400).json({ error: "Shortcode is required" })
+            return res.status(400).json({ error: "Shortcode is required" });
         }
 
-        // Check if file exists
-        const fileRecord = await File.findOne({ where: { shortCode } });
-        if (!fileRecord) {
-            // Redirect to client 404 or home
-            return res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/?error=not-found`);
+        const share = await Share.findOne({ where: { shortCode } });
+        if (!share) {
+            return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/?error=not-found`);
         }
 
-        // Redirect to client download page
-        res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/d/${shortCode}`);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/d/${shortCode}`);
     } catch (error) {
         console.error(error);
-        res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/?error=server-error`);
+        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/?error=server-error`);
     }
-}
+};
 
-// Direct download with file streaming
+// Download a specific file from a share
 const downloadFile = async (req, res) => {
     try {
-        const { shortCode } = req.params;
-        if (!shortCode) {
-            return res.status(400).json({ error: "Shortcode is required" })
-        }
-        
-        const fileRecord = await File.findOne({ where: { shortCode } });
-        if (!fileRecord) {
-            return res.status(404).json({ error: "File not found" })
+        const { shortCode, fileId } = req.params;
+        if (!shortCode || !fileId) {
+            return res.status(400).json({ error: "Shortcode and fileId are required" });
         }
 
-        // Increment download count
-        await fileRecord.increment('downloadCount');
+        const share = await Share.findOne({ where: { shortCode } });
+        if (!share) {
+            return res.status(404).json({ error: "Share not found" });
+        }
+
+        // Check if expired
+        if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+            return res.status(410).json({ error: "This share has expired" });
+        }
+
+        const file = await ShareFile.findOne({
+            where: { id: fileId, shareId: share.id }
+        });
+
+        if (!file) {
+            return res.status(404).json({ error: "File not found in this share" });
+        }
+
+        // Increment download count on the share
+        await share.increment('downloadCount');
 
         try {
             // Fetch the file from Cloudinary
-            const response = await axios.get(fileRecord.cloudinaryUrl, {
+            const response = await axios.get(file.cloudinaryUrl, {
                 responseType: 'stream',
-                timeout: 30000
+                timeout: 60000
             });
 
             // Set headers for file download
-            res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.originalName}"`);
+            const encodedName = encodeURIComponent(file.originalName);
+            res.setHeader('Content-Disposition', `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
             res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
-            res.setHeader('Content-Length', response.headers['content-length'] || '');
+            if (response.headers['content-length']) {
+                res.setHeader('Content-Length', response.headers['content-length']);
+            }
 
             // Stream the file to client
             response.data.pipe(res);
@@ -91,14 +121,13 @@ const downloadFile = async (req, res) => {
             });
         } catch (fetchError) {
             console.error('Error fetching file from Cloudinary:', fetchError.message);
-            // Fallback: redirect to Cloudinary
-            res.redirect(fileRecord.cloudinaryUrl);
+            // Fallback: redirect to Cloudinary URL
+            res.redirect(file.cloudinaryUrl);
         }
-
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: "Server error" });
     }
-}
+};
 
-module.exports = { getFileInfo, redirectToDownloadPage, downloadFile };
+module.exports = { getShareInfo, redirectToDownloadPage, downloadFile };

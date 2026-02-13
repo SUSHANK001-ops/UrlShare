@@ -1,29 +1,29 @@
 'use client';
 
-import { CloudUpload, X, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { CloudUpload, X, CheckCircle, AlertCircle, Clock, Copy, Link } from 'lucide-react'
 import React, { useState, useRef } from 'react'
 import { toast } from 'react-toastify'
 import { uploadFiles } from '../services/uploadService'
 
-interface UploadedFile {
-  name: string;
+interface ShareResult {
   shareUrl: string;
-  status: 'uploading' | 'completed' | 'failed';
-  progress: number;
-  error?: string;
+  fileCount: number;
+  totalSize: number;
+  uploadedFiles: Array<{ fileName: string; size: number }>;
+  failedFiles: Array<{ fileName: string; error: string }>;
+  expiresAt: string;
 }
 
 const Uploder = () => {
   const [files, setFiles] = useState<File[]>([])
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [shareResult, setShareResult] = useState<ShareResult | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [totalProgress, setTotalProgress] = useState(0)
   const [totalSize, setTotalSize] = useState(0)
   const [deleteTimeHours, setDeleteTimeHours] = useState(0.167) // ~10 minutes default
   const fileInputRef = useRef<HTMLInputElement>(null)
   
-  const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB total
-  const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
+  const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB total per share
 
   const getDeleteTimeLabel = (hours: number) => {
     if (hours === 0.167) return '10 minutes'
@@ -42,14 +42,9 @@ const Uploder = () => {
     const validFiles: File[] = []
 
     for (const file of selectedFiles) {
-      if (file.size > MAX_FILE_SIZE) {
-        toast.error(`File "${file.name}" is too large. Max 10MB per file.`)
-        continue
-      }
-      
       newTotalSize += file.size
       if (newTotalSize > MAX_TOTAL_SIZE) {
-        toast.error(`Total size exceeds 100MB limit. Remaining quota: ${Math.round((MAX_TOTAL_SIZE - totalSize) / 1024 / 1024)}MB`)
+        toast.error(`Total size exceeds 100MB limit. Remaining: ${Math.round((MAX_TOTAL_SIZE - totalSize) / 1024 / 1024)}MB`)
         break
       }
       
@@ -72,7 +67,7 @@ const Uploder = () => {
     }
 
     setIsUploading(true)
-    const uploadResults: UploadedFile[] = []
+    setShareResult(null)
 
     try {
       const response = await uploadFiles(files, deleteTimeHours, (progressEvent) => {
@@ -80,39 +75,25 @@ const Uploder = () => {
         setTotalProgress(progress)
       })
 
-      // Process results from response
-      if (response.files) {
-        response.files.forEach((file) => {
-          if (file.shareUrl) {
-            uploadResults.push({
-              name: file.fileName,
-              shareUrl: file.shareUrl,
-              status: 'completed',
-              progress: 100,
-            })
-          } else {
-            uploadResults.push({
-              name: file.fileName,
-              shareUrl: '',
-              status: 'failed',
-              progress: 0,
-              error: file.error || 'Upload failed',
-            })
-          }
-        })
-      }
+      setShareResult({
+        shareUrl: response.shareUrl,
+        fileCount: response.fileCount,
+        totalSize: response.totalSize,
+        uploadedFiles: response.uploadedFiles,
+        failedFiles: response.failedFiles,
+        expiresAt: response.expiresAt,
+      })
 
-      if (uploadResults.length === 0) {
-        toast.error('No files were uploaded')
-      } else {
-        toast.success(`Successfully uploaded ${uploadResults.filter(r => r.status === 'completed').length} file(s)!`)
+      toast.success(`Uploaded ${response.fileCount} file(s)! Share URL is ready.`)
+
+      if (response.failedFiles.length > 0) {
+        toast.warning(`${response.failedFiles.length} file(s) failed to upload.`)
       }
     } catch (error: any) {
       console.error('Upload error:', error)
       toast.error('Upload failed: ' + (error.response?.data?.error || error.message || 'Unknown error'))
     }
 
-    setUploadedFiles(uploadResults)
     setFiles([])
     setTotalSize(0)
     setTotalProgress(0)
@@ -134,8 +115,14 @@ const Uploder = () => {
     toast.success('Link copied to clipboard!')
   }
 
-  const clearCompleted = () => {
-    setUploadedFiles([])
+  const clearResult = () => {
+    setShareResult(null)
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB'
   }
 
   return (
@@ -250,58 +237,94 @@ const Uploder = () => {
           )}
         </div>
 
-        {/* Uploaded Files */}
-        {uploadedFiles.length > 0 && (
+        {/* Share Result */}
+        {shareResult && (
           <div className='bg-slate-700 rounded-lg p-8'>
             <div className='flex items-center justify-between mb-6'>
-              <h2 className='text-2xl font-bold text-white'>Uploaded Files</h2>
+              <h2 className='text-2xl font-bold text-white flex items-center gap-2'>
+                <CheckCircle className='w-7 h-7 text-green-400' />
+                Share Ready!
+              </h2>
               <button
-                onClick={clearCompleted}
-                className='text-red-400 hover:text-red-300 text-sm'
+                onClick={clearResult}
+                className='text-slate-400 hover:text-slate-300'
               >
-                Clear All
+                <X className='w-6 h-6' />
               </button>
             </div>
 
-            <div className='space-y-4'>
-              {uploadedFiles.map((file, index) => (
-                <div
-                  key={index}
-                  className={`p-4 rounded-lg ${
-                    file.status === 'completed' ? 'bg-slate-600' : 'bg-red-900/30'
-                  }`}
+            {/* Share URL - The main thing */}
+            <div className='bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-lg mb-6'>
+              <div className='flex items-center gap-2 mb-3'>
+                <Link className='w-5 h-5 text-blue-200' />
+                <p className='text-blue-200 font-semibold text-sm'>Your Share Link</p>
+              </div>
+              <div className='flex gap-2'>
+                <input
+                  type='text'
+                  readOnly
+                  value={shareResult.shareUrl}
+                  className='flex-1 px-4 py-3 bg-blue-800/50 text-white rounded-lg focus:outline-none select-all text-sm font-mono'
+                />
+                <button
+                  onClick={() => copyToClipboard(shareResult.shareUrl)}
+                  className='px-6 py-3 bg-white text-blue-600 hover:bg-blue-50 font-semibold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap'
                 >
-                  <div className='flex items-start justify-between'>
-                    <div className='flex items-start gap-3 flex-1'>
-                      {file.status === 'completed' ? (
-                        <CheckCircle className='w-6 h-6 text-green-400 mt-1 flex-shrink-0' />
-                      ) : (
-                        <AlertCircle className='w-6 h-6 text-red-400 mt-1 flex-shrink-0' />
-                      )}
-                      <div className='flex-1 min-w-0'>
-                        <p className='text-white font-semibold truncate'>{file.name}</p>
-                        {file.status === 'completed' && (
-                          <p className='text-slate-300 text-sm break-all mt-2'>{file.shareUrl}</p>
-                        )}
-                        {file.status === 'failed' && (
-                          <p className='text-red-300 text-sm mt-2'>{file.error}</p>
-                        )}
-                        {file.status === 'completed' && (
-                          <p className='text-slate-400 text-xs mt-2'>Will auto-delete in {getDeleteTimeLabel(deleteTimeHours)}</p>
-                        )}
-                      </div>
+                  <Copy className='w-5 h-5' />
+                  Copy
+                </button>
+              </div>
+              <p className='text-blue-200 text-xs mt-3'>
+                Anyone with this link can download all {shareResult.fileCount} file(s)
+              </p>
+            </div>
+
+            {/* Files in this share */}
+            <div className='mb-4'>
+              <h3 className='text-white font-semibold mb-3'>
+                Uploaded Files ({shareResult.fileCount})
+              </h3>
+              <div className='space-y-2 max-h-48 overflow-y-auto'>
+                {shareResult.uploadedFiles.map((file, index) => (
+                  <div key={index} className='flex items-center justify-between bg-slate-600 p-3 rounded'>
+                    <div className='flex items-center gap-2'>
+                      <CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0' />
+                      <span className='text-white text-sm truncate'>{file.fileName}</span>
                     </div>
-                    {file.status === 'completed' && (
-                      <button
-                        onClick={() => copyToClipboard(file.shareUrl)}
-                        className='ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm whitespace-nowrap'
-                      >
-                        Copy Link
-                      </button>
-                    )}
+                    <span className='text-slate-300 text-xs'>{formatSize(file.size)}</span>
                   </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Failed files */}
+            {shareResult.failedFiles.length > 0 && (
+              <div className='mb-4'>
+                <h3 className='text-red-400 font-semibold mb-3'>
+                  Failed ({shareResult.failedFiles.length})
+                </h3>
+                <div className='space-y-2'>
+                  {shareResult.failedFiles.map((file, index) => (
+                    <div key={index} className='flex items-center gap-2 bg-red-900/30 p-3 rounded'>
+                      <AlertCircle className='w-4 h-4 text-red-400 flex-shrink-0' />
+                      <span className='text-red-300 text-sm truncate'>{file.fileName}</span>
+                      <span className='text-red-400 text-xs ml-auto'>{file.error}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+            )}
+
+            {/* Stats */}
+            <div className='grid grid-cols-2 gap-4 bg-slate-600 p-4 rounded-lg'>
+              <div>
+                <p className='text-slate-400 text-xs'>Total Size</p>
+                <p className='text-white font-semibold'>{formatSize(shareResult.totalSize)}</p>
+              </div>
+              <div>
+                <p className='text-slate-400 text-xs'>Auto-deletes in</p>
+                <p className='text-white font-semibold'>{getDeleteTimeLabel(deleteTimeHours)}</p>
+              </div>
             </div>
           </div>
         )}

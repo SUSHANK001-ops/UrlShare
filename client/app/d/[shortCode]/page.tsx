@@ -1,65 +1,73 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { Download, Copy, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { Download, Copy, CheckCircle, AlertCircle, Clock, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { getFileInfo } from '../../../services/downloadService';
+import { toast } from 'react-toastify';
+import { getShareInfo, downloadFileFromShare } from '../../../services/downloadService';
 
-interface FileInfo {
+interface ShareFileInfo {
+  id: string;
   originalName: string;
+  fileSize: number;
+}
+
+interface ShareData {
+  shortCode: string;
   downloadCount: number;
   expiresAt: string;
-  cloudinaryUrl: string;
+  totalSize: number;
+  fileCount: number;
+  files: ShareFileInfo[];
 }
 
 export default function DownloadPage() {
   const params = useParams();
   const shortCode = params.shortCode as string;
-  const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
+  const [shareData, setShareData] = useState<ShareData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchFile = async () => {
+    const fetchShare = async () => {
       try {
         setIsLoading(true);
-        const data = await getFileInfo(shortCode);
-        setFileInfo(data);
+        const data = await getShareInfo(shortCode);
+        setShareData(data);
         setError(null);
       } catch (err: any) {
-        console.error('Error fetching file:', err);
-        setError(err.response?.data?.error || 'File not found or has expired');
-        setFileInfo(null);
+        console.error('Error fetching share:', err);
+        setError(err.response?.data?.error || 'Share not found or has expired');
+        setShareData(null);
       } finally {
         setIsLoading(false);
       }
     };
 
     if (shortCode) {
-      fetchFile();
+      fetchShare();
     }
   }, [shortCode]);
 
-  const handleDownload = async () => {
-    if (shortCode && fileInfo) {
-      try {
-        const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-        const serverBase = apiBase.replace('/api', '');
-        const downloadUrl = `${serverBase}/d/download/${shortCode}`;
-        
-        // Create an anchor element and trigger download
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileInfo.originalName || 'download';
-        link.setAttribute('target', '_blank');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } catch (error) {
-        console.error('Download error:', error);
-        alert('Failed to start download');
-      }
+  const handleDownloadFile = async (file: ShareFileInfo) => {
+    setDownloadingFileId(file.id);
+    try {
+      await downloadFileFromShare(shortCode, file.id, file.originalName);
+      toast.success(`Downloading ${file.originalName}`);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to start download');
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (!shareData?.files) return;
+    for (const file of shareData.files) {
+      await handleDownloadFile(file);
     }
   };
 
@@ -67,11 +75,18 @@ export default function DownloadPage() {
     const currentUrl = window.location.href;
     navigator.clipboard.writeText(currentUrl);
     setCopied(true);
+    toast.success('Link copied!');
     setTimeout(() => setCopied(false), 2000);
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
   };
 
   const getRemainingTime = (expiresAt: string) => {
@@ -94,16 +109,16 @@ export default function DownloadPage() {
         {isLoading && (
           <div className='bg-slate-700 rounded-lg p-12 text-center'>
             <div className='w-16 h-16 rounded-full border-4 border-blue-400 border-t-transparent animate-spin mx-auto mb-4'></div>
-            <p className='text-white text-lg font-semibold'>Loading file information...</p>
+            <p className='text-white text-lg font-semibold'>Loading share information...</p>
           </div>
         )}
 
         {error && (
           <div className='bg-red-900/30 border border-red-600 rounded-lg p-8'>
             <div className='flex items-center gap-4 mb-4'>
-              <AlertCircle className='w-12 h-12 text-red-400 flex-shrink-0' />
+              <AlertCircle className='w-12 h-12 text-red-400 shrink-0' />
               <div>
-                <h2 className='text-2xl font-bold text-white mb-2'>File Not Found</h2>
+                <h2 className='text-2xl font-bold text-white mb-2'>Share Not Found</h2>
                 <p className='text-red-300'>{error}</p>
               </div>
             </div>
@@ -118,41 +133,72 @@ export default function DownloadPage() {
           </div>
         )}
 
-        {fileInfo && !error && (
+        {shareData && !error && (
           <div className='space-y-6'>
-            {/* File Card */}
+            {/* Share Header Card */}
             <div className='bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg p-8 text-white'>
               <div className='flex items-start gap-4 mb-6'>
-                <Download className='w-16 h-16 flex-shrink-0' />
+                <Download className='w-16 h-16 shrink-0' />
                 <div className='flex-1 min-w-0'>
-                  <h1 className='text-3xl font-bold mb-2 break-all'>{fileInfo.originalName}</h1>
-                  <p className='text-blue-100'>Ready to download</p>
+                  <h1 className='text-3xl font-bold mb-2'>
+                    {shareData.fileCount} File{shareData.fileCount > 1 ? 's' : ''} Shared
+                  </h1>
+                  <p className='text-blue-100'>Total size: {formatSize(shareData.totalSize)}</p>
                 </div>
               </div>
 
-              {/* File Stats */}
+              {/* Share Stats */}
               <div className='grid grid-cols-2 gap-4 mb-8 bg-blue-500/30 p-4 rounded-lg'>
                 <div>
                   <p className='text-blue-100 text-sm'>Downloads</p>
-                  <p className='text-2xl font-bold'>{fileInfo.downloadCount}</p>
+                  <p className='text-2xl font-bold'>{shareData.downloadCount}</p>
                 </div>
                 <div>
                   <p className='text-blue-100 text-sm mb-1 flex items-center gap-1'>
                     <Clock className='w-4 h-4' />
                     Time Remaining
                   </p>
-                  <p className='text-2xl font-bold'>{getRemainingTime(fileInfo.expiresAt)}</p>
+                  <p className='text-2xl font-bold'>{getRemainingTime(shareData.expiresAt)}</p>
                 </div>
               </div>
 
-              {/* Download Button */}
+              {/* Download All Button */}
               <button
-                onClick={handleDownload}
-                className='w-full bg-white text-blue-600 hover:bg-blue-50 font-bold py-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-3 text-lg'
+                onClick={shareData.fileCount === 1 ? () => handleDownloadFile(shareData.files[0]) : handleDownloadAll}
+                disabled={downloadingFileId !== null}
+                className='w-full bg-white text-blue-600 hover:bg-blue-50 disabled:opacity-50 font-bold py-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-3 text-lg'
               >
                 <Download className='w-6 h-6' />
-                Download File Now
+                {downloadingFileId ? 'Downloading...' : shareData.fileCount === 1 ? 'Download File' : 'Download All Files'}
               </button>
+            </div>
+
+            {/* Individual Files List */}
+            <div className='bg-slate-700 rounded-lg p-6'>
+              <h3 className='text-white font-semibold mb-4'>
+                Files ({shareData.fileCount})
+              </h3>
+              <div className='space-y-2 max-h-72 overflow-y-auto'>
+                {shareData.files.map((file) => (
+                  <div key={file.id} className='flex items-center justify-between bg-slate-600 p-4 rounded-lg'>
+                    <div className='flex items-center gap-3 flex-1 min-w-0'>
+                      <FileText className='w-5 h-5 text-blue-400 shrink-0' />
+                      <div className='min-w-0'>
+                        <p className='text-white text-sm truncate'>{file.originalName}</p>
+                        <p className='text-slate-400 text-xs'>{formatSize(file.fileSize)}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDownloadFile(file)}
+                      disabled={downloadingFileId === file.id}
+                      className='ml-3 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm rounded-lg transition-all flex items-center gap-1 whitespace-nowrap'
+                    >
+                      <Download className='w-4 h-4' />
+                      {downloadingFileId === file.id ? '...' : 'Download'}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Copy Link Card */}
@@ -161,7 +207,7 @@ export default function DownloadPage() {
               <div className='flex gap-2'>
                 <input
                   type='text'
-                  value={window.location.href}
+                  value={typeof window !== 'undefined' ? window.location.href : ''}
                   readOnly
                   className='flex-1 px-4 py-3 bg-slate-600 text-white rounded-lg focus:outline-none select-all text-sm'
                 />
@@ -181,19 +227,23 @@ export default function DownloadPage() {
 
             {/* File Details Card */}
             <div className='bg-slate-700 rounded-lg p-6'>
-              <h3 className='text-white font-semibold mb-4'>File Details</h3>
+              <h3 className='text-white font-semibold mb-4'>Share Details</h3>
               <div className='space-y-3 text-slate-300'>
                 <div className='flex justify-between items-center'>
-                  <span>File Name</span>
-                  <span className='font-semibold text-white break-all text-right ml-4'>{fileInfo.originalName}</span>
+                  <span>Total Files</span>
+                  <span className='font-semibold text-white'>{shareData.fileCount}</span>
+                </div>
+                <div className='flex justify-between items-center'>
+                  <span>Total Size</span>
+                  <span className='font-semibold text-white'>{formatSize(shareData.totalSize)}</span>
                 </div>
                 <div className='flex justify-between items-center'>
                   <span>Times Downloaded</span>
-                  <span className='font-semibold text-white'>{fileInfo.downloadCount}</span>
+                  <span className='font-semibold text-white'>{shareData.downloadCount}</span>
                 </div>
                 <div className='flex justify-between items-center'>
                   <span>Expires At</span>
-                  <span className='font-semibold text-white text-sm'>{formatDate(fileInfo.expiresAt)}</span>
+                  <span className='font-semibold text-white text-sm'>{formatDate(shareData.expiresAt)}</span>
                 </div>
                 <div className='flex justify-between items-center'>
                   <span>Share Code</span>
@@ -205,7 +255,7 @@ export default function DownloadPage() {
             {/* Warning */}
             <div className='bg-yellow-900/30 border border-yellow-600 rounded-lg p-4'>
               <p className='text-yellow-200 text-sm'>
-                ⚠️ This file will be automatically deleted after the expiration time. Make sure to download it before it expires.
+                &#x26A0;&#xFE0F; These files will be automatically deleted after the expiration time. Make sure to download them before they expire.
               </p>
             </div>
 
@@ -215,7 +265,7 @@ export default function DownloadPage() {
                 href='/'
                 className='text-slate-400 hover:text-slate-300 transition-colors'
               >
-                ← Back to Home
+                &larr; Back to Home
               </a>
             </div>
           </div>

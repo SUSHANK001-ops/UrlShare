@@ -1,11 +1,11 @@
 const router = require('express').Router();
-const { getFileInfo, redirectToDownloadPage, downloadFile } = require('../controller/downloadController.js');
+const { getShareInfo, redirectToDownloadPage, downloadFile } = require('../controller/downloadController.js');
 
-// API endpoint for getting file info (doesn't increment counter)
-router.get('/download/:shortCode', getFileInfo);
+// API endpoint for getting share info with all files
+router.get('/download/:shortCode', getShareInfo);
 
-// API endpoint for actual download (increments counter)
-router.get('/download/:shortCode/file', downloadFile);
+// API endpoint for downloading a specific file from a share
+router.get('/download/:shortCode/file/:fileId', downloadFile);
 
 // Redirect to client download page
 router.get('/:shortCode', redirectToDownloadPage);

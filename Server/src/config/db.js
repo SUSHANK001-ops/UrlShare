@@ -22,6 +22,9 @@ const connectDB = async () => {
        await sequelize.authenticate();
         console.log("DataBase connected successfully");
         
+        // Import models so they get registered before sync
+        require('../models/shareModel.js');
+        
         // Sync models with database (create tables if they don't exist)
         await sequelize.sync({ alter: true });
         console.log("Database tables synchronized successfully");

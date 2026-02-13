@@ -1,13 +1,18 @@
 import apiClient from './api'
 
+interface UploadedFileInfo {
+  fileName: string
+  size: number
+}
+
 interface UploadResponse {
-  files: Array<{
-    fileName: string
-    shareUrl?: string
-    fileId?: string
-    error?: string
-    status?: string
-  }>
+  shareUrl: string
+  shortCode: string
+  fileCount: number
+  totalSize: number
+  uploadedFiles: UploadedFileInfo[]
+  failedFiles: Array<{ fileName: string; error: string }>
+  expiresAt: string
   message: string
 }
 
@@ -27,21 +32,12 @@ export const uploadFiles = async (
   const deleteTimeMs = deleteTimeHours * 60 * 60 * 1000
   formData.append('deleteTime', deleteTimeMs.toString())
 
-  try {
-    const response = await apiClient.post<UploadResponse>('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress,
-    })
-    return response.data
-  } catch (error: any) {
-    // If the response contains files data, return it even if status is error
-    if (error.response?.data?.files) {
-      return error.response.data
-    }
-    // Otherwise re-throw the error
-    throw error
-  }
+  const response = await apiClient.post<UploadResponse>('/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+    onUploadProgress,
+    timeout: 120000, // 2 minutes for large uploads
+  })
+  return response.data
 }
-
