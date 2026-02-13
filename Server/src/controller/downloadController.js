@@ -41,14 +41,14 @@ const redirectToDownloadPage = async (req, res) => {
         const fileRecord = await File.findOne({ where: { shortCode } });
         if (!fileRecord) {
             // Redirect to client 404 or home
-            return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/?error=not-found`);
+            return res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/?error=not-found`);
         }
 
         // Redirect to client download page
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/d/${shortCode}`);
+        res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/d/${shortCode}`);
     } catch (error) {
         console.error(error);
-        res.redirect(`${process.env.CLIENT_URL || 'http://localhost:3000'}/?error=server-error`);
+        res.redirect(`${process.env.CLIENT_URL || 'https://urlshare.sushanka.com.np'}/?error=server-error`);
     }
 }
 

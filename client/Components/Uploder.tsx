@@ -2,6 +2,7 @@
 
 import { CloudUpload, X, CheckCircle, AlertCircle, Clock } from 'lucide-react'
 import React, { useState, useRef } from 'react'
+import { toast } from 'react-toastify'
 import { uploadFiles } from '../services/uploadService'
 
 interface UploadedFile {
@@ -42,13 +43,13 @@ const Uploder = () => {
 
     for (const file of selectedFiles) {
       if (file.size > MAX_FILE_SIZE) {
-        alert(`File "${file.name}" is too large. Max 10MB per file.`)
+        toast.error(`File "${file.name}" is too large. Max 10MB per file.`)
         continue
       }
       
       newTotalSize += file.size
       if (newTotalSize > MAX_TOTAL_SIZE) {
-        alert(`Total size exceeds 100MB limit. Remaining quota: ${Math.round((MAX_TOTAL_SIZE - totalSize) / 1024 / 1024)}MB`)
+        toast.error(`Total size exceeds 100MB limit. Remaining quota: ${Math.round((MAX_TOTAL_SIZE - totalSize) / 1024 / 1024)}MB`)
         break
       }
       
@@ -66,7 +67,7 @@ const Uploder = () => {
 
   const uploadFilesHandler = async () => {
     if (files.length === 0) {
-      alert('Please select files first')
+      toast.error('Please select files first')
       return
     }
 
@@ -102,11 +103,13 @@ const Uploder = () => {
       }
 
       if (uploadResults.length === 0) {
-        alert('No files were uploaded')
+        toast.error('No files were uploaded')
+      } else {
+        toast.success(`Successfully uploaded ${uploadResults.filter(r => r.status === 'completed').length} file(s)!`)
       }
     } catch (error: any) {
       console.error('Upload error:', error)
-      alert('Upload failed: ' + (error.response?.data?.error || error.message || 'Unknown error'))
+      toast.error('Upload failed: ' + (error.response?.data?.error || error.message || 'Unknown error'))
     }
 
     setUploadedFiles(uploadResults)
@@ -128,7 +131,7 @@ const Uploder = () => {
 
   const copyToClipboard = (url: string) => {
     navigator.clipboard.writeText(url)
-    alert('Link copied to clipboard!')
+    toast.success('Link copied to clipboard!')
   }
 
   const clearCompleted = () => {

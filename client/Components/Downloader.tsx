@@ -2,7 +2,8 @@
 
 import { Download, X, AlertCircle, CheckCircle } from 'lucide-react'
 import React, { useState } from 'react'
-import { getFileInfo } from '../services/downloadService'
+import { toast } from 'react-toastify'
+import { getFileInfo, downloadFileViaBackend } from '../services/downloadService'
 
 interface FileInfo {
   shortCode: string;
@@ -18,6 +19,7 @@ const Downloader = () => {
   const [input, setInput] = useState('')
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
 
   const extractShortCode = (input: string): string => {
     // Handle full URL like http://localhost:3000/d/abc123
@@ -30,14 +32,14 @@ const Downloader = () => {
 
   const handleFetchFile = async () => {
     if (!input.trim()) {
-      alert('Please enter a short code or share URL')
+      toast.error('Please enter a short code or share URL')
       return
     }
 
     const shortCode = extractShortCode(input)
     
     if (!shortCode || shortCode.length === 0) {
-      alert('Invalid short code or URL format')
+      toast.error('Invalid short code or URL format')
       return
     }
 
@@ -71,15 +73,17 @@ const Downloader = () => {
     }
   }
 
-  const triggerDownload = () => {
-    if (fileInfo?.downloadUrl) {
-      // Create a temporary link and trigger download
-      const link = document.createElement('a')
-      link.href = fileInfo.downloadUrl
-      link.download = fileInfo.fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+  const triggerDownload = async () => {
+    if (fileInfo?.shortCode && fileInfo?.fileName) {
+      setIsDownloading(true)
+      try {
+        await downloadFileViaBackend(fileInfo.shortCode, fileInfo.fileName)
+        toast.success('Download started!')
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to download file')
+      } finally {
+        setIsDownloading(false)
+      }
     }
   }
 
@@ -177,10 +181,11 @@ const Downloader = () => {
               {fileInfo.status === 'success' && (
                 <button
                   onClick={triggerDownload}
-                  className='w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
+                  disabled={isDownloading}
+                  className='w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
                 >
                   <Download className='w-5 h-5' />
-                  Download File
+                  {isDownloading ? 'Downloading...' : 'Download File'}
                 </button>
               )}
             </div>
