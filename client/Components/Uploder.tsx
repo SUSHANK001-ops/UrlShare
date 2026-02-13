@@ -3,6 +3,7 @@
 import { CloudUpload, X, CheckCircle, AlertCircle, Clock, Copy, Link } from 'lucide-react'
 import React, { useState, useRef } from 'react'
 import { toast } from 'react-toastify'
+import { QRCodeSVG } from 'qrcode.react'
 import { uploadFiles } from '../services/uploadService'
 
 interface ShareResult {
@@ -126,19 +127,19 @@ const Uploder = () => {
   }
 
   return (
-    <div className='min-h-screen w-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8'>
+    <div className='w-full bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
       <div className='max-w-4xl mx-auto'>
-        <h1 className='text-4xl font-bold text-white mb-8 text-center'>File Uploader</h1>
+        <h1 className='text-2xl sm:text-4xl font-bold text-white mb-6 sm:mb-8 text-center'>File Uploader</h1>
 
         {/* Upload Area */}
-        <div className='bg-slate-700 rounded-lg p-8 mb-8'>
+        <div className='bg-slate-700 rounded-lg p-4 sm:p-8 mb-6 sm:mb-8'>
           <div className='flex flex-col items-center justify-center mb-6'>
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className='flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 w-40 h-40 rounded-full transition-all duration-300 transform hover:scale-105'
+              className='flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 w-28 h-28 sm:w-40 sm:h-40 rounded-full transition-all duration-300 transform hover:scale-105'
             >
-              <CloudUpload className='w-16 h-16 text-white mb-2' />
+              <CloudUpload className='w-10 h-10 sm:w-16 sm:h-16 text-white mb-2' />
               <span className='text-white font-semibold text-center text-sm'>Click to Upload</span>
             </button>
             <input
@@ -239,7 +240,7 @@ const Uploder = () => {
 
         {/* Share Result */}
         {shareResult && (
-          <div className='bg-slate-700 rounded-lg p-8'>
+          <div className='bg-slate-700 rounded-lg p-4 sm:p-8'>
             <div className='flex items-center justify-between mb-6'>
               <h2 className='text-2xl font-bold text-white flex items-center gap-2'>
                 <CheckCircle className='w-7 h-7 text-green-400' />
@@ -254,21 +255,21 @@ const Uploder = () => {
             </div>
 
             {/* Share URL - The main thing */}
-            <div className='bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-lg mb-6'>
+            <div className='bg-gradient-to-r from-blue-600 to-blue-700 p-4 sm:p-6 rounded-lg mb-6'>
               <div className='flex items-center gap-2 mb-3'>
                 <Link className='w-5 h-5 text-blue-200' />
                 <p className='text-blue-200 font-semibold text-sm'>Your Share Link</p>
               </div>
-              <div className='flex gap-2'>
+              <div className='flex flex-col sm:flex-row gap-2'>
                 <input
                   type='text'
                   readOnly
                   value={shareResult.shareUrl}
-                  className='flex-1 px-4 py-3 bg-blue-800/50 text-white rounded-lg focus:outline-none select-all text-sm font-mono'
+                  className='flex-1 px-4 py-3 bg-blue-800/50 text-white rounded-lg focus:outline-none select-all text-xs sm:text-sm font-mono'
                 />
                 <button
                   onClick={() => copyToClipboard(shareResult.shareUrl)}
-                  className='px-6 py-3 bg-white text-blue-600 hover:bg-blue-50 font-semibold rounded-lg transition-all flex items-center gap-2 whitespace-nowrap'
+                  className='px-6 py-3 bg-white text-blue-600 hover:bg-blue-50 font-semibold rounded-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap'
                 >
                   <Copy className='w-5 h-5' />
                   Copy
@@ -277,6 +278,21 @@ const Uploder = () => {
               <p className='text-blue-200 text-xs mt-3'>
                 Anyone with this link can download all {shareResult.fileCount} file(s)
               </p>
+            </div>
+
+            {/* QR Code */}
+            <div className='bg-slate-600 p-4 sm:p-6 rounded-lg mb-6 flex flex-col items-center'>
+              <p className='text-white font-semibold mb-4 text-sm sm:text-base'>Scan QR Code to Download</p>
+              <div className='bg-white p-3 sm:p-4 rounded-xl'>
+                <QRCodeSVG
+                  value={shareResult.shareUrl}
+                  size={160}
+                  level='H'
+                  includeMargin={false}
+                  className='w-[140px] h-[140px] sm:w-[200px] sm:h-[200px]'
+                />
+              </div>
+              <p className='text-slate-400 text-xs mt-3'>Scan with your phone camera to open the download link</p>
             </div>
 
             {/* Files in this share */}

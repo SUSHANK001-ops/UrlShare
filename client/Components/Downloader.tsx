@@ -109,29 +109,29 @@ const Downloader = () => {
   }
 
   return (
-    <div className='min-h-screen w-screen bg-gradient-to-br from-slate-900 to-slate-800 p-8'>
+    <div className='w-full bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
       <div className='max-w-4xl mx-auto'>
-        <h1 className='text-4xl font-bold text-white mb-8 text-center'>Download Files</h1>
+        <h1 className='text-2xl sm:text-4xl font-bold text-white mb-6 sm:mb-8 text-center'>Download Files</h1>
 
         {/* Input Area */}
-        <div className='bg-slate-700 rounded-lg p-8 mb-8'>
+        <div className='bg-slate-700 rounded-lg p-4 sm:p-8 mb-6 sm:mb-8'>
           <div className='space-y-4'>
             <div>
-              <label className='block text-white font-semibold mb-3'>Enter Share Code or URL</label>
-              <div className='flex gap-2'>
+              <label className='block text-white font-semibold mb-3 text-sm sm:text-base'>Enter Share Code or URL</label>
+              <div className='flex flex-col sm:flex-row gap-2'>
                 <input
                   type='text'
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   disabled={isLoading}
-                  placeholder='e.g., abc123ef or http://localhost:3000/d/abc123ef'
-                  className='flex-1 px-4 py-3 rounded-lg bg-slate-600 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50'
+                  placeholder='e.g., abc123ef or share URL'
+                  className='flex-1 px-4 py-3 rounded-lg bg-slate-600 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm'
                 />
                 <button
                   onClick={handleFetchShare}
                   disabled={isLoading || !input.trim()}
-                  className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300 flex items-center gap-2 whitespace-nowrap'
+                  className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 whitespace-nowrap'
                 >
                   <Download className='w-5 h-5' />
                   {isLoading ? 'Fetching...' : 'Fetch Files'}
@@ -163,10 +163,10 @@ const Downloader = () => {
                     )}
                     {shareInfo.status === 'success' && (
                       <>
-                        <p className='text-white font-semibold text-lg mb-1'>
+                        <p className='text-white font-semibold text-base sm:text-lg mb-1'>
                           {shareInfo.fileCount} File{(shareInfo.fileCount || 0) > 1 ? 's' : ''} Available
                         </p>
-                        <div className='flex gap-4 text-slate-300 text-sm'>
+                        <div className='flex flex-col sm:flex-row gap-1 sm:gap-4 text-slate-300 text-xs sm:text-sm'>
                           <span>Total: {formatSize(shareInfo.totalSize || 0)}</span>
                           <span>Downloads: {shareInfo.downloadCount}</span>
                           <span>Expires: {formatDate(shareInfo.expiresAt || '')}</span>
@@ -237,8 +237,8 @@ const Downloader = () => {
         </div>
 
         {/* Instructions */}
-        <div className='bg-slate-700 rounded-lg p-8'>
-          <h2 className='text-2xl font-bold text-white mb-4'>How to Download</h2>
+        <div className='bg-slate-700 rounded-lg p-4 sm:p-8'>
+          <h2 className='text-xl sm:text-2xl font-bold text-white mb-4'>How to Download</h2>
           <div className='space-y-3 text-slate-300'>
             <p className='flex items-start gap-3'>
               <span className='bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center shrink-0 text-sm font-bold mt-0.5'>1</span>
