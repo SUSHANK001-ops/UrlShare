@@ -1,20 +1,36 @@
 const { Sequelize } = require("sequelize");
-require('dotenv').config()
+require('dotenv').config();
+
+function normalizeDatabaseUrl(databaseUrl) {
+  const parsedUrl = new URL(databaseUrl);
+  parsedUrl.searchParams.delete('sslmode');
+  parsedUrl.searchParams.delete('pgbouncer');
+  return parsedUrl.toString();
+}
+
+function shouldUseSsl(databaseUrl) {
+  const parsedUrl = new URL(databaseUrl);
+  return !['localhost', '127.0.0.1'].includes(parsedUrl.hostname);
+}
 
 if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL environment variable is not defined');
 }
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
+const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+const useSsl = shouldUseSsl(process.env.DATABASE_URL);
+
+const sequelize = new Sequelize(databaseUrl, {
   dialect: "postgres",
-  protocol: 'postgres',
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
-    }
-  },
-  logging: false
+  logging: false,
+  dialectOptions: useSsl
+    ? {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      }
+    : {}
 });
 
 const connectDB = async () => {

@@ -77,7 +77,7 @@ UrlShare/
 ### Prerequisites
 
 - Node.js 18+
-- PostgreSQL database (e.g., Supabase)
+- PostgreSQL database (e.g., Neon)
 - Cloudinary account
 
 ### 1. Clone the repo
@@ -94,11 +94,11 @@ cd Server
 npm install
 ```
 
-Create a `.env` file in `Server/`:
+Create a `.env` file in `Server/` and paste the Neon connection string from your project dashboard:
 
 ```env
 PORT=5000
-DATABASE_URL=postgresql://user:password@host:port/database
+DATABASE_URL=postgresql://USER:PASSWORD@HOST/DB_NAME?sslmode=require
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
