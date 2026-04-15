@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Download, Copy, CheckCircle, AlertCircle, Clock, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-toastify';
@@ -23,6 +23,7 @@ interface ShareData {
 
 export default function DownloadPage() {
   const params = useParams();
+  const router = useRouter();
   const shortCode = params.shortCode as string;
   const [shareData, setShareData] = useState<ShareData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -30,20 +31,54 @@ export default function DownloadPage() {
   const [copied, setCopied] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
   const [password, setPassword] = useState('');
+  const [accessPassword, setAccessPassword] = useState('');
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordAttempts, setPasswordAttempts] = useState(0);
 
   const fetchShare = async () => {
+    const submittedPassword = password.trim();
+
     try {
       setIsLoading(true);
-      const data = await getShareInfo(shortCode, password);
+      setPasswordError('');
+      const data = await getShareInfo(shortCode, submittedPassword);
+      setAccessPassword(submittedPassword);
       setPassword('');
       setShareData(data);
       setError(null);
       setIsPasswordProtected(false);
+      setPasswordAttempts(0);
     } catch (err: any) {
       console.error('Error fetching share:', err);
-      setIsPasswordProtected(err.response?.status === 401);
-      setError(err.response?.status === 401 ? null : (err.response?.data?.error || 'Share not found or has expired'));
+      if (err.response?.status === 401) {
+        setIsPasswordProtected(true);
+        setShareData(null);
+        setError(null);
+
+        if (!submittedPassword) {
+          setPasswordError('');
+          return;
+        }
+
+        const nextAttempts = passwordAttempts + 1;
+        setPasswordAttempts(nextAttempts);
+
+        if (nextAttempts >= 3) {
+          toast.error('Wrong password. Returning to home.');
+          router.push('/');
+          return;
+        }
+
+        const attemptsLeft = 3 - nextAttempts;
+        const wrongPasswordMessage = `Wrong password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`;
+        setPasswordError(wrongPasswordMessage);
+        toast.error(wrongPasswordMessage);
+        return;
+      }
+
+      setIsPasswordProtected(false);
+      setError(err.response?.data?.error || 'Share not found or has expired');
       setShareData(null);
     } finally {
       setIsLoading(false);
@@ -52,6 +87,11 @@ export default function DownloadPage() {
 
   useEffect(() => {
     if (shortCode) {
+      setPassword('');
+      setAccessPassword('');
+      setPasswordError('');
+      setPasswordAttempts(0);
+      setIsPasswordProtected(false);
       fetchShare();
     }
   }, [shortCode]);
@@ -59,7 +99,7 @@ export default function DownloadPage() {
   const handleDownloadFile = async (file: ShareFileInfo) => {
     setDownloadingFileId(file.id);
     try {
-      await downloadFileFromShare(shortCode, file.id, file.originalName, password);
+      await downloadFileFromShare(shortCode, file.id, file.originalName, accessPassword);
       toast.success(`Downloading ${file.originalName}`);
     } catch (error) {
       console.error('Download error:', error);
@@ -109,7 +149,7 @@ export default function DownloadPage() {
   };
 
   return (
-    <div className='min-h-screen w-full bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center px-4 py-6 sm:p-8'>
+    <div className='min-h-screen w-full bg-linear-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center px-4 py-6 sm:p-8'>
       <div className='max-w-2xl w-full flex-1 flex flex-col justify-center'>
         {isLoading && (
           <div className='bg-slate-700 rounded-lg p-12 text-center'>
@@ -158,6 +198,12 @@ export default function DownloadPage() {
                 {isLoading ? 'Unlocking...' : 'Unlock'}
               </button>
             </div>
+            {passwordError && (
+              <p className='mt-3 text-sm text-red-300'>{passwordError}</p>
+            )}
+            {passwordAttempts > 0 && passwordAttempts < 3 && (
+              <p className='mt-2 text-xs text-slate-400'>Attempts remaining: {3 - passwordAttempts}</p>
+            )}
             <div className='mt-6 text-center'>
               <a
                 href='/'
@@ -172,7 +218,7 @@ export default function DownloadPage() {
         {shareData && !error && (
           <div className='space-y-6'>
             {/* Share Header Card */}
-            <div className='bg-gradient-to-br from-blue-600 to-blue-700 rounded-lg p-4 sm:p-8 text-white'>
+            <div className='bg-linear-to-br from-blue-600 to-blue-700 rounded-lg p-4 sm:p-8 text-white'>
               <div className='flex items-start gap-3 sm:gap-4 mb-4 sm:mb-6'>
                 <Download className='w-10 h-10 sm:w-16 sm:h-16 shrink-0' />
                 <div className='flex-1 min-w-0'>

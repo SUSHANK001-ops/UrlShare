@@ -2,6 +2,7 @@
 
 import { Download, X, AlertCircle, CheckCircle, FileText } from 'lucide-react'
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'react-toastify'
 import { getShareInfo, downloadFileFromShare } from '../services/downloadService'
 
@@ -23,12 +24,16 @@ interface ShareInfo {
 }
 
 const Downloader = () => {
+  const router = useRouter()
   const [input, setInput] = useState('')
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null)
   const [needsPassword, setNeedsPassword] = useState(false)
   const [password, setPassword] = useState('')
+  const [accessPassword, setAccessPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordAttempts, setPasswordAttempts] = useState(0)
 
   const extractShortCode = (input: string): string => {
     const urlMatch = input.match(/\/d\/([a-z0-9]+)/i)
@@ -56,12 +61,18 @@ const Downloader = () => {
 
     setIsLoading(true)
     setNeedsPassword(false)
+    setPasswordError('')
     setShareInfo({ shortCode, status: 'loading' })
 
+    const submittedPassword = password.trim()
+
     try {
-      const response = await getShareInfo(shortCode, password)
+      const response = await getShareInfo(shortCode, submittedPassword)
+      setAccessPassword(submittedPassword)
       setPassword('')
       setNeedsPassword(false)
+      setPasswordError('')
+      setPasswordAttempts(0)
       setShareInfo({
         shortCode,
         status: 'success',
@@ -75,6 +86,24 @@ const Downloader = () => {
       if (error.response?.status === 401) {
         setNeedsPassword(true)
         setShareInfo(null)
+
+        if (!submittedPassword) {
+          setPasswordError('')
+          return
+        }
+
+        const nextAttempts = passwordAttempts + 1
+        setPasswordAttempts(nextAttempts)
+
+        if (nextAttempts >= 3) {
+          toast.error('Wrong password. Returning to home.')
+          router.push('/')
+          return
+        }
+
+        const attemptsLeft = 3 - nextAttempts
+        setPasswordError(`Wrong password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`)
+        toast.error(`Wrong password. ${attemptsLeft} attempt${attemptsLeft === 1 ? '' : 's'} left.`)
         return
       }
       setShareInfo({
@@ -91,7 +120,7 @@ const Downloader = () => {
     if (!shareInfo?.shortCode) return
     setDownloadingFileId(file.id)
     try {
-      await downloadFileFromShare(shareInfo.shortCode, file.id, file.originalName, password)
+      await downloadFileFromShare(shareInfo.shortCode, file.id, file.originalName, accessPassword)
       toast.success(`Downloading ${file.originalName}`)
     } catch (error: any) {
       toast.error(error.message || 'Failed to download file')
@@ -116,10 +145,15 @@ const Downloader = () => {
   const clearDownload = () => {
     setShareInfo(null)
     setInput('')
+    setPassword('')
+    setAccessPassword('')
+    setPasswordError('')
+    setPasswordAttempts(0)
+    setNeedsPassword(false)
   }
 
   return (
-    <div className='w-full bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
+    <div className='w-full bg-linear-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
       <div className='max-w-4xl mx-auto'>
         <h1 className='text-2xl sm:text-4xl font-bold text-white mb-6 sm:mb-8 text-center'>Download Files</h1>
 
@@ -141,7 +175,7 @@ const Downloader = () => {
                 <button
                   onClick={handleFetchShare}
                   disabled={isLoading || !input.trim() || (needsPassword && !password.trim())}
-                  className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 whitespace-nowrap'
+                  className='px-6 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 whitespace-nowrap'
                 >
                   <Download className='w-5 h-5' />
                     {isLoading ? (needsPassword ? 'Unlocking...' : 'Fetching...') : (needsPassword ? 'Unlock' : 'Fetch Files')}
@@ -169,11 +203,17 @@ const Downloader = () => {
                   <button
                     onClick={handleFetchShare}
                     disabled={isLoading || !password.trim()}
-                    className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300'
+                    className='px-6 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300'
                   >
                     {isLoading ? 'Unlocking...' : 'Unlock'}
                   </button>
                 </div>
+                {passwordError && (
+                  <p className='mt-3 text-sm text-red-300'>{passwordError}</p>
+                )}
+                {passwordAttempts > 0 && passwordAttempts < 3 && (
+                  <p className='mt-2 text-xs text-slate-400'>Attempts remaining: {3 - passwordAttempts}</p>
+                )}
               </div>
             )}
 
@@ -247,7 +287,7 @@ const Downloader = () => {
                     <button
                       onClick={downloadAll}
                       disabled={downloadingFileId !== null}
-                      className='w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
+                      className='w-full bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
                     >
                       <Download className='w-5 h-5' />
                       Download All Files
@@ -258,7 +298,7 @@ const Downloader = () => {
                     <button
                       onClick={() => shareInfo.files && triggerDownload(shareInfo.files[0])}
                       disabled={downloadingFileId !== null}
-                      className='w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
+                      className='w-full bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300 flex items-center justify-center gap-2'
                     >
                       <Download className='w-5 h-5' />
                       {downloadingFileId ? 'Downloading...' : 'Download File'}

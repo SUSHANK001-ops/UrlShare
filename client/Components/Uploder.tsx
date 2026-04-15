@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudUpload, X, CheckCircle, AlertCircle, Clock, Copy, Link } from 'lucide-react'
+import { CloudUpload, X, CheckCircle, AlertCircle, Clock, Copy, Link, Eye, EyeOff, RefreshCw } from 'lucide-react'
 import React, { useState, useRef } from 'react'
 import { toast } from 'react-toastify'
 import { QRCodeSVG } from 'qrcode.react'
@@ -23,9 +23,22 @@ const Uploder = () => {
   const [totalSize, setTotalSize] = useState(0)
   const [deleteTimeHours, setDeleteTimeHours] = useState(0.167) // ~10 minutes default
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB total per share
+  const PASSWORD_CHARACTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?'
+
+  const generatePassword = (length = 12) => {
+    const randomValues = new Uint32Array(length)
+
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(randomValues)
+      return Array.from(randomValues, (value) => PASSWORD_CHARACTERS[value % PASSWORD_CHARACTERS.length]).join('')
+    }
+
+    return Array.from({ length }, () => PASSWORD_CHARACTERS[Math.floor(Math.random() * PASSWORD_CHARACTERS.length)]).join('')
+  }
 
   const getDeleteTimeLabel = (hours: number) => {
     if (hours === 0.167) return '10 minutes'
@@ -91,8 +104,6 @@ const Uploder = () => {
       if (response.failedFiles.length > 0) {
         toast.warning(`${response.failedFiles.length} file(s) failed to upload.`)
       }
-
-      setPassword('')
     } catch (error: unknown) {
       const uploadError = error as {
         response?: { data?: { error?: string } }
@@ -120,7 +131,14 @@ const Uploder = () => {
 
   const copyToClipboard = (url: string) => {
     navigator.clipboard.writeText(url)
-    toast.success('Link copied to clipboard!')
+    toast.success('Copied to clipboard!')
+  }
+
+  const handleGeneratePassword = () => {
+    const generatedPassword = generatePassword()
+    setPassword(generatedPassword)
+    setShowPassword(true)
+    toast.success('Password generated')
   }
 
   const clearResult = () => {
@@ -134,7 +152,7 @@ const Uploder = () => {
   }
 
   return (
-    <div className='w-full bg-gradient-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
+    <div className='w-full bg-linear-to-br from-slate-900 to-slate-800 px-4 py-6 sm:p-8'>
       <div className='max-w-4xl mx-auto'>
         <h1 className='text-2xl sm:text-4xl font-bold text-white mb-6 sm:mb-8 text-center'>File Uploader</h1>
 
@@ -144,7 +162,7 @@ const Uploder = () => {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className='flex flex-col items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 w-28 h-28 sm:w-40 sm:h-40 rounded-full transition-all duration-300 transform hover:scale-105'
+              className='flex flex-col items-center justify-center bg-linear-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 w-28 h-28 sm:w-40 sm:h-40 rounded-full transition-all duration-300 transform hover:scale-105'
             >
               <CloudUpload className='w-10 h-10 sm:w-16 sm:h-16 text-white mb-2' />
               <span className='text-white font-semibold text-center text-sm'>Click to Upload</span>
@@ -162,17 +180,48 @@ const Uploder = () => {
 
           {/* Optional Password */}
           <div className='mb-6 bg-slate-600 p-4 rounded-lg'>
-            <label className='block text-white font-semibold mb-3'>
-              Password protection (optional)
-            </label>
-            <input
-              type='password'
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isUploading}
-              placeholder='Set a password for this share'
-              className='w-full px-4 py-3 rounded-lg bg-slate-500 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm'
-            />
+            <div className='flex items-center justify-between gap-3 mb-3'>
+              <label className='block text-white font-semibold'>
+                Password protection (optional)
+              </label>
+              <button
+                type='button'
+                onClick={handleGeneratePassword}
+                disabled={isUploading}
+                className='inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-500 text-white text-sm font-semibold hover:bg-slate-400 disabled:opacity-50 transition-all'
+              >
+                <RefreshCw className='w-4 h-4' />
+                Generate
+              </button>
+            </div>
+            <div className='flex flex-col sm:flex-row gap-2'>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isUploading}
+                placeholder='Set a password for this share'
+                className='flex-1 px-4 py-3 rounded-lg bg-slate-500 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm'
+              />
+              <button
+                type='button'
+                onClick={() => setShowPassword((current) => !current)}
+                disabled={isUploading || !password}
+                className='inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-slate-500 text-white text-sm font-semibold hover:bg-slate-400 disabled:opacity-50 transition-all'
+              >
+                {showPassword ? <EyeOff className='w-4 h-4' /> : <Eye className='w-4 h-4' />}
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+              <button
+                type='button'
+                onClick={() => copyToClipboard(password)}
+                disabled={isUploading || !password}
+                className='inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-slate-500 text-white text-sm font-semibold hover:bg-slate-400 disabled:opacity-50 transition-all'
+              >
+                <Copy className='w-4 h-4' />
+                Copy
+              </button>
+            </div>
             <p className='text-slate-300 text-xs mt-2'>Leave blank to keep the share public.</p>
           </div>
 
@@ -243,7 +292,7 @@ const Uploder = () => {
                 <div>
                   <div className='w-full bg-slate-600 rounded-full h-3 overflow-hidden'>
                     <div
-                      className='bg-gradient-to-r from-green-400 to-blue-500 h-full transition-all duration-300'
+                      className='bg-linear-to-r from-green-400 to-blue-500 h-full transition-all duration-300'
                       style={{ width: `${totalProgress}%` }}
                     ></div>
                   </div>
@@ -253,7 +302,7 @@ const Uploder = () => {
               <button
                 onClick={uploadFilesHandler}
                 disabled={isUploading}
-                className='w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300'
+                className='w-full bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 disabled:opacity-50 text-white font-semibold py-3 rounded-lg transition-all duration-300'
               >
                 {isUploading ? 'Uploading...' : `Upload ${files.length} File${files.length > 1 ? 's' : ''}`}
               </button>
@@ -278,7 +327,7 @@ const Uploder = () => {
             </div>
 
             {/* Share URL - The main thing */}
-            <div className='bg-gradient-to-r from-blue-600 to-blue-700 p-4 sm:p-6 rounded-lg mb-6'>
+            <div className='bg-linear-to-r from-blue-600 to-blue-700 p-4 sm:p-6 rounded-lg mb-6'>
               <div className='flex items-center gap-2 mb-3'>
                 <Link className='w-5 h-5 text-blue-200' />
                 <p className='text-blue-200 font-semibold text-sm'>Your Share Link</p>
@@ -312,7 +361,7 @@ const Uploder = () => {
                   size={160}
                   level='H'
                   includeMargin={false}
-                  className='w-[140px] h-[140px] sm:w-[200px] sm:h-[200px]'
+                  className='w-35 h-35 sm:w-50 sm:h-50'
                 />
               </div>
               <p className='text-slate-400 text-xs mt-3'>Scan with your phone camera to open the download link</p>
@@ -327,7 +376,7 @@ const Uploder = () => {
                 {shareResult.uploadedFiles.map((file, index) => (
                   <div key={index} className='flex items-center justify-between bg-slate-600 p-3 rounded'>
                     <div className='flex items-center gap-2'>
-                      <CheckCircle className='w-4 h-4 text-green-400 flex-shrink-0' />
+                      <CheckCircle className='w-4 h-4 text-green-400 shrink-0' />
                       <span className='text-white text-sm truncate'>{file.fileName}</span>
                     </div>
                     <span className='text-slate-300 text-xs'>{formatSize(file.size)}</span>
@@ -345,7 +394,7 @@ const Uploder = () => {
                 <div className='space-y-2'>
                   {shareResult.failedFiles.map((file, index) => (
                     <div key={index} className='flex items-center gap-2 bg-red-900/30 p-3 rounded'>
-                      <AlertCircle className='w-4 h-4 text-red-400 flex-shrink-0' />
+                      <AlertCircle className='w-4 h-4 text-red-400 shrink-0' />
                       <span className='text-red-300 text-sm truncate'>{file.fileName}</span>
                       <span className='text-red-400 text-xs ml-auto'>{file.error}</span>
                     </div>
