@@ -1,8 +1,15 @@
 const cloudinary = require("../config/cloudinary.js");
+const crypto = require('crypto');
 const { v4: uuidv4 } = require("uuid");
 const { Share, ShareFile } = require("../models/shareModel.js");
 
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total per share
+
+function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const derivedKey = crypto.scryptSync(password, salt, 64).toString('hex');
+    return `${salt}:${derivedKey}`;
+}
 
 // upload buffer to Cloudinary via stream
 function uploadBuffer(buffer, originalName) {
@@ -67,6 +74,8 @@ const uploadController = async (req, res) => {
         // Parse deleteTime (ms). Default 10 minutes.
         const deleteTimeMs = Number.parseInt(req.body?.deleteTime, 10) || 10 * 60 * 1000;
         const expiresAt = new Date(Date.now() + deleteTimeMs);
+        const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+        const passwordHash = password ? hashPassword(password) : null;
 
         // Create the Share record first
         const share = await Share.create({
@@ -75,6 +84,7 @@ const uploadController = async (req, res) => {
             downloadCount: 0,
             totalSize,
             fileCount: req.files.length,
+            passwordHash,
         });
 
         const uploadedFiles = [];
@@ -155,6 +165,7 @@ const uploadController = async (req, res) => {
             uploadedFiles,
             failedFiles,
             expiresAt,
+            passwordProtected: Boolean(passwordHash),
             message: `Successfully uploaded ${uploadedFiles.length} file(s). Share URL: ${shareUrl}`,
         });
     } catch (err) {

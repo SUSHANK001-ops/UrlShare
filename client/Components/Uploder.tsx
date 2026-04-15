@@ -22,6 +22,7 @@ const Uploder = () => {
   const [totalProgress, setTotalProgress] = useState(0)
   const [totalSize, setTotalSize] = useState(0)
   const [deleteTimeHours, setDeleteTimeHours] = useState(0.167) // ~10 minutes default
+  const [password, setPassword] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB total per share
@@ -71,7 +72,7 @@ const Uploder = () => {
     setShareResult(null)
 
     try {
-      const response = await uploadFiles(files, deleteTimeHours, (progressEvent) => {
+      const response = await uploadFiles(files, deleteTimeHours, password, (progressEvent) => {
         const progress = Math.round((progressEvent.loaded / progressEvent.total!) * 100)
         setTotalProgress(progress)
       })
@@ -90,9 +91,15 @@ const Uploder = () => {
       if (response.failedFiles.length > 0) {
         toast.warning(`${response.failedFiles.length} file(s) failed to upload.`)
       }
-    } catch (error: any) {
+
+      setPassword('')
+    } catch (error: unknown) {
+      const uploadError = error as {
+        response?: { data?: { error?: string } }
+        message?: string
+      }
       console.error('Upload error:', error)
-      toast.error('Upload failed: ' + (error.response?.data?.error || error.message || 'Unknown error'))
+      toast.error('Upload failed: ' + (uploadError.response?.data?.error || uploadError.message || 'Unknown error'))
     }
 
     setFiles([])
@@ -151,6 +158,22 @@ const Uploder = () => {
               className='hidden'
               accept='*/*'
             />
+          </div>
+
+          {/* Optional Password */}
+          <div className='mb-6 bg-slate-600 p-4 rounded-lg'>
+            <label className='block text-white font-semibold mb-3'>
+              Password protection (optional)
+            </label>
+            <input
+              type='password'
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isUploading}
+              placeholder='Set a password for this share'
+              className='w-full px-4 py-3 rounded-lg bg-slate-500 text-white placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm'
+            />
+            <p className='text-slate-300 text-xs mt-2'>Leave blank to keep the share public.</p>
           </div>
 
           {/* Delete Time Selector */}

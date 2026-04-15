@@ -1,5 +1,40 @@
 const { Share, ShareFile } = require('../models/shareModel.js');
 const axios = require('axios');
+const crypto = require('crypto');
+
+function verifyPassword(password, storedHash) {
+    if (!storedHash) return true;
+    if (!password) return false;
+
+    const [salt, hash] = storedHash.split(':');
+    if (!salt || !hash) return false;
+
+    const derivedKey = crypto.scryptSync(password, salt, 64);
+    const expectedKey = Buffer.from(hash, 'hex');
+
+    if (derivedKey.length !== expectedKey.length) {
+        return false;
+    }
+
+    return crypto.timingSafeEqual(derivedKey, expectedKey);
+}
+
+function requireSharePassword(req, res, share) {
+    if (!share.passwordHash) {
+        return true;
+    }
+
+    const password = typeof req.headers['x-share-password'] === 'string'
+        ? req.headers['x-share-password']
+        : '';
+
+    if (!verifyPassword(password, share.passwordHash)) {
+        res.status(401).json({ error: 'Password required or incorrect password' });
+        return false;
+    }
+
+    return true;
+}
 
 // Get share info with all files (for API)
 const getShareInfo = async (req, res) => {
@@ -27,6 +62,10 @@ const getShareInfo = async (req, res) => {
             return res.status(410).json({ error: "This share has expired" });
         }
 
+        if (!requireSharePassword(req, res, share)) {
+            return;
+        }
+
         res.status(200).json({
             id: share.id,
             shortCode: share.shortCode,
@@ -34,6 +73,7 @@ const getShareInfo = async (req, res) => {
             expiresAt: share.expiresAt,
             totalSize: share.totalSize,
             fileCount: share.fileCount,
+            passwordProtected: Boolean(share.passwordHash),
             files: share.files.map(f => ({
                 id: f.id,
                 originalName: f.originalName,
@@ -82,6 +122,10 @@ const downloadFile = async (req, res) => {
         // Check if expired
         if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
             return res.status(410).json({ error: "This share has expired" });
+        }
+
+        if (!requireSharePassword(req, res, share)) {
+            return;
         }
 
         const file = await ShareFile.findOne({

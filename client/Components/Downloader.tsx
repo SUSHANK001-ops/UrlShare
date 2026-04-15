@@ -27,6 +27,8 @@ const Downloader = () => {
   const [shareInfo, setShareInfo] = useState<ShareInfo | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null)
+  const [needsPassword, setNeedsPassword] = useState(false)
+  const [password, setPassword] = useState('')
 
   const extractShortCode = (input: string): string => {
     const urlMatch = input.match(/\/d\/([a-z0-9]+)/i)
@@ -53,10 +55,13 @@ const Downloader = () => {
     }
 
     setIsLoading(true)
+    setNeedsPassword(false)
     setShareInfo({ shortCode, status: 'loading' })
 
     try {
-      const response = await getShareInfo(shortCode)
+      const response = await getShareInfo(shortCode, password)
+      setPassword('')
+      setNeedsPassword(false)
       setShareInfo({
         shortCode,
         status: 'success',
@@ -67,6 +72,11 @@ const Downloader = () => {
         files: response.files,
       })
     } catch (error: any) {
+      if (error.response?.status === 401) {
+        setNeedsPassword(true)
+        setShareInfo(null)
+        return
+      }
       setShareInfo({
         shortCode,
         status: 'error',
@@ -81,7 +91,7 @@ const Downloader = () => {
     if (!shareInfo?.shortCode) return
     setDownloadingFileId(file.id)
     try {
-      await downloadFileFromShare(shareInfo.shortCode, file.id, file.originalName)
+      await downloadFileFromShare(shareInfo.shortCode, file.id, file.originalName, password)
       toast.success(`Downloading ${file.originalName}`)
     } catch (error: any) {
       toast.error(error.message || 'Failed to download file')
@@ -130,11 +140,11 @@ const Downloader = () => {
                 />
                 <button
                   onClick={handleFetchShare}
-                  disabled={isLoading || !input.trim()}
+                  disabled={isLoading || !input.trim() || (needsPassword && !password.trim())}
                   className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 whitespace-nowrap'
                 >
                   <Download className='w-5 h-5' />
-                  {isLoading ? 'Fetching...' : 'Fetch Files'}
+                    {isLoading ? (needsPassword ? 'Unlocking...' : 'Fetching...') : (needsPassword ? 'Unlock' : 'Fetch Files')}
                 </button>
               </div>
               <p className='text-slate-400 text-sm mt-2'>
@@ -143,8 +153,32 @@ const Downloader = () => {
             </div>
           </div>
 
-          {/* Share Info */}
-          {shareInfo && (
+            {needsPassword && !shareInfo && (
+              <div className='bg-slate-600 rounded-lg p-6 sm:p-8 mb-8'>
+                <p className='text-white font-semibold text-base sm:text-lg mb-3'>This share is password protected.</p>
+                <p className='text-slate-300 text-sm mb-4'>Enter the password to unlock the files.</p>
+                <div className='flex flex-col sm:flex-row gap-2'>
+                  <input
+                    type='password'
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    placeholder='Enter password'
+                    className='flex-1 px-4 py-3 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 text-sm'
+                  />
+                  <button
+                    onClick={handleFetchShare}
+                    disabled={isLoading || !password.trim()}
+                    className='px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all duration-300'
+                  >
+                    {isLoading ? 'Unlocking...' : 'Unlock'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Share Info */}
+            {shareInfo && (
             <div className={`mt-8 p-6 rounded-lg ${
               shareInfo.status === 'success' ? 'bg-slate-600' : shareInfo.status === 'error' ? 'bg-red-900/30' : 'bg-slate-600'
             }`}>

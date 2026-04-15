@@ -29,23 +29,28 @@ export default function DownloadPage() {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [isPasswordProtected, setIsPasswordProtected] = useState(false);
+
+  const fetchShare = async () => {
+    try {
+      setIsLoading(true);
+      const data = await getShareInfo(shortCode, password);
+      setPassword('');
+      setShareData(data);
+      setError(null);
+      setIsPasswordProtected(false);
+    } catch (err: any) {
+      console.error('Error fetching share:', err);
+      setIsPasswordProtected(err.response?.status === 401);
+      setError(err.response?.status === 401 ? null : (err.response?.data?.error || 'Share not found or has expired'));
+      setShareData(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchShare = async () => {
-      try {
-        setIsLoading(true);
-        const data = await getShareInfo(shortCode);
-        setShareData(data);
-        setError(null);
-      } catch (err: any) {
-        console.error('Error fetching share:', err);
-        setError(err.response?.data?.error || 'Share not found or has expired');
-        setShareData(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (shortCode) {
       fetchShare();
     }
@@ -54,7 +59,7 @@ export default function DownloadPage() {
   const handleDownloadFile = async (file: ShareFileInfo) => {
     setDownloadingFileId(file.id);
     try {
-      await downloadFileFromShare(shortCode, file.id, file.originalName);
+      await downloadFileFromShare(shortCode, file.id, file.originalName, password);
       toast.success(`Downloading ${file.originalName}`);
     } catch (error) {
       console.error('Download error:', error);
@@ -113,7 +118,7 @@ export default function DownloadPage() {
           </div>
         )}
 
-        {error && (
+        {error && !isPasswordProtected && (
           <div className='bg-red-900/30 border border-red-600 rounded-lg p-4 sm:p-8'>
             <div className='flex items-center gap-3 sm:gap-4 mb-4'>
               <AlertCircle className='w-8 h-8 sm:w-12 sm:h-12 text-red-400 shrink-0' />
@@ -128,6 +133,37 @@ export default function DownloadPage() {
                 className='inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-all'
               >
                 Back to Home
+              </a>
+            </div>
+          </div>
+        )}
+
+        {isPasswordProtected && !shareData && (
+          <div className='bg-slate-700 rounded-lg p-4 sm:p-8'>
+            <h2 className='text-xl sm:text-2xl font-bold text-white mb-2'>Password Required</h2>
+            <p className='text-slate-300 mb-4'>Enter the password to view and download this share.</p>
+            <div className='flex flex-col sm:flex-row gap-2'>
+              <input
+                type='password'
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder='Enter share password'
+                className='flex-1 px-4 py-3 bg-slate-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
+              />
+              <button
+                onClick={fetchShare}
+                disabled={!password.trim() || isLoading}
+                className='px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-lg transition-all'
+              >
+                {isLoading ? 'Unlocking...' : 'Unlock'}
+              </button>
+            </div>
+            <div className='mt-6 text-center'>
+              <a
+                href='/'
+                className='text-slate-400 hover:text-slate-300 transition-colors'
+              >
+                &larr; Back to Home
               </a>
             </div>
           </div>

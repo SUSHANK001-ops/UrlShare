@@ -24,6 +24,7 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
+  allowedHeaders: ['Content-Type', 'x-share-password'],
   credentials: true,
   optionsSuccessStatus: 200
 };

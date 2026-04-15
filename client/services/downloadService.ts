@@ -16,15 +16,18 @@ interface ShareDetails {
   files: ShareFileInfo[]
 }
 
-export const getShareInfo = async (shortCode: string): Promise<ShareDetails> => {
-  const response = await apiClient.get<ShareDetails>(`/download/${shortCode}`)
+export const getShareInfo = async (shortCode: string, password = ''): Promise<ShareDetails> => {
+  const response = await apiClient.get<ShareDetails>(`/download/${shortCode}`, {
+    headers: password.trim() ? { 'x-share-password': password.trim() } : {},
+  })
   return response.data
 }
 
-export const downloadFileFromShare = async (shortCode: string, fileId: string, fileName: string) => {
+export const downloadFileFromShare = async (shortCode: string, fileId: string, fileName: string, password = '') => {
   try {
     const response = await apiClient.get(`/download/${shortCode}/file/${fileId}`, {
       responseType: 'blob',
+      headers: password.trim() ? { 'x-share-password': password.trim() } : {},
       timeout: 120000, // 2 minutes for large files
     })
 

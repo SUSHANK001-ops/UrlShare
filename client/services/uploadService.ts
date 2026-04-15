@@ -19,6 +19,7 @@ interface UploadResponse {
 export const uploadFiles = async (
   files: File[],
   deleteTimeHours: number = 0.167, // default ~10 minutes
+  password: string = '',
   onUploadProgress?: (progressEvent: any) => void
 ): Promise<UploadResponse> => {
   const formData = new FormData()
@@ -31,6 +32,10 @@ export const uploadFiles = async (
   // Convert hours to milliseconds
   const deleteTimeMs = deleteTimeHours * 60 * 60 * 1000
   formData.append('deleteTime', deleteTimeMs.toString())
+
+  if (password.trim()) {
+    formData.append('password', password.trim())
+  }
 
   const response = await apiClient.post<UploadResponse>('/upload', formData, {
     headers: {

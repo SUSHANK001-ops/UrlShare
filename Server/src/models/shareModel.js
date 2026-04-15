@@ -29,6 +29,10 @@ const Share = sequelize.define('Share', {
     fileCount: {
         type: DataTypes.INTEGER,
         defaultValue: 0
+    },
+    passwordHash: {
+        type: DataTypes.STRING,
+        allowNull: true
     }
 }, {
     timestamps: true
