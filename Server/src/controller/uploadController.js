@@ -2,6 +2,7 @@ const cloudinary = require("../config/cloudinary.js");
 const crypto = require('crypto');
 const { v4: uuidv4 } = require("uuid");
 const { Share, ShareFile } = require("../models/shareModel.js");
+const { cleanupShareById } = require('../services/shareCleanupService.js');
 
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB total per share
 
@@ -138,17 +139,10 @@ const uploadController = async (req, res) => {
         if (deleteTimeMs > 0) {
             setTimeout(async () => {
                 try {
-                    // Get all files in this share
-                    const files = await ShareFile.findAll({ where: { shareId: share.id } });
-                    // Delete from Cloudinary
-                    for (const file of files) {
-                        await cloudinary.uploader.destroy(file.cloudinaryPublicId, {
-                            resource_type: file.resourceType || "auto"
-                        }).catch(e => console.error("Cloudinary delete failed:", e));
+                    const deleted = await cleanupShareById(share.id);
+                    if (deleted) {
+                        console.log(`Share ${shortCode} auto-deleted`);
                     }
-                    // Delete DB records (cascade will remove ShareFiles)
-                    await Share.destroy({ where: { id: share.id } });
-                    console.log(`Share ${shortCode} auto-deleted (${files.length} files)`);
                 } catch (e) {
                     console.error("Scheduled delete failed:", e);
                 }

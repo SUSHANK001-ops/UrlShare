@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const { connectDB } = require('./src/config/db');
 const uploadRoute = require('./src/routes/uploadRoute.js');
 const { getShareInfo, downloadFile, redirectToDownloadPage } = require('./src/controller/downloadController.js');
+const { startExpiredShareCleanupJob } = require('./src/services/shareCleanupService.js');
 dotenv.config()
 
 const app = express();
@@ -48,7 +49,8 @@ app.get('/api/download/:shortCode/file/:fileId', downloadFile);
 // Redirect: /d/:shortCode -> client download page
 app.get('/d/:shortCode', redirectToDownloadPage);
 
-app.listen(port,()=>{
+app.listen(port, async () => {
     console.log(`Server is running in port : ${port}`)
-    connectDB()
+  await connectDB()
+  startExpiredShareCleanupJob()
 })

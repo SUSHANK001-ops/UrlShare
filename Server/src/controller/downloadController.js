@@ -1,6 +1,11 @@
 const { Share, ShareFile } = require('../models/shareModel.js');
 const axios = require('axios');
 const crypto = require('crypto');
+const { cleanupShareById } = require('../services/shareCleanupService.js');
+
+function isShareExpired(share) {
+    return Boolean(share?.expiresAt && new Date(share.expiresAt) <= new Date());
+}
 
 function verifyPassword(password, storedHash) {
     if (!storedHash) return true;
@@ -58,7 +63,10 @@ const getShareInfo = async (req, res) => {
         }
 
         // Check if expired
-        if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+        if (isShareExpired(share)) {
+            await cleanupShareById(share.id).catch((error) => {
+                console.error(`Failed cleaning expired share ${share.shortCode}:`, error.message);
+            });
             return res.status(410).json({ error: "This share has expired" });
         }
 
@@ -120,7 +128,10 @@ const downloadFile = async (req, res) => {
         }
 
         // Check if expired
-        if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
+        if (isShareExpired(share)) {
+            await cleanupShareById(share.id).catch((error) => {
+                console.error(`Failed cleaning expired share ${share.shortCode}:`, error.message);
+            });
             return res.status(410).json({ error: "This share has expired" });
         }
 
