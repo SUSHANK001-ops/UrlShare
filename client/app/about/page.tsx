@@ -35,7 +35,9 @@ export const metadata: Metadata = {
     title: "About UrlShare - Simple File Sharing Platform",
     description: "The fastest way to share files instantly with just a URL",
   },
-  canonical: "https://urlshare.sushanka.com.np/about",
+  alternates: {
+    canonical: "https://urlshare.sushanka.com.np/about",
+  },
 };
 
 export default function About() {
@@ -65,7 +67,7 @@ export default function About() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
       <main className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-        {/* Breadcrumb Navigation */}
+     
         <nav className="max-w-4xl mx-auto px-4 py-6 text-sm text-slate-400">
           <div className="flex items-center gap-2">
             <Link
