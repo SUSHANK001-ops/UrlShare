@@ -1,0 +1,22 @@
+User-agent: *
+Allow: /
+Disallow: /api/*
+Disallow: /*.json$
+Allow: /sitemap.xml
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemap location
+Sitemap: https://urlshare.sushanka.com.np/sitemap.xml
+
+# Crawl delay
+Crawl-delay: 1
+Request-rate: 30/60
+
+# Standard crawl-delay for other bots
+User-agent: *
+Crawl-delay: 2
