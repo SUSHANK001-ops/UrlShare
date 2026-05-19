@@ -164,7 +164,17 @@ const uploadController = async (req, res) => {
         });
     } catch (err) {
         console.error("Upload controller error:", err);
-        res.status(500).json({ error: "Upload failed: " + err.message });
+        
+        let errorMessage = "An unexpected error occurred during upload.";
+        
+        // Handle database quota/billing errors gracefully
+        if (err.message && err.message.includes("compute time quota")) {
+            errorMessage = "Service temporarily unavailable due to capacity limits. Please try again later.";
+        } else if (err.message) {
+            errorMessage = err.message;
+        }
+
+        res.status(500).json({ error: errorMessage });
     }
 };
 
